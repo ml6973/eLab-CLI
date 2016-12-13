@@ -33,7 +33,7 @@ def validateEmail(userName, email):
 passwordHash = "$2y$10$tIoSoR.uDxWAXyUqs8oTguY/ssvmkbHIVG9zOwOZOzoJHPBkFvgJC"
 
 if len(sys.argv) != 2:
-    print("Usage: " + sys.argv[0] + "[JSON]")
+    print("Usage: " + sys.argv[0] + " <JSON File>")
     exit()
 
 #load config file in
