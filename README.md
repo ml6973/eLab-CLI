@@ -13,9 +13,56 @@ $ sudo pip install pyDNS
 ```
 
 ##register.py
-Takes a Json file with an array of students and registers them to the database.
+Takes a JSON file with an array of students and registers them to the database.
 
 Usage:
 ```
-$ register.py [JSON File]
+$ register.py <JSON File>
 ```
+
+Format of JSON File:
+```
+{
+  "students": [
+    {
+      "userName"  : *value*,
+      "email" : *email value*
+    },
+
+    ...
+
+  ]
+}
+```
+*Note:* This script is only looking for the mentioned fields in the above format
+of the JSON file. Any extra key-value pairs in the JSON file will be ignored by
+the script.
+
+##enroll.py
+Takes a JSON file as an argument.
+Spins up clouds instances and adds students to a course.
+
+Usage:
+```
+enroll.py <JSON File>
+```
+
+Format of JSON File:
+```
+{
+    "students": [
+        {
+            "userName" : *value*
+        },
+
+        ...
+
+    ],
+
+    "image" : *image value*,
+    "cloud" : *cloud value*
+}
+```
+*Note:* This script is only looking for the mentioned fields in the above format
+of the JSON file. Any extra key-value pairs in the JSON file will be ignored by
+the script.
