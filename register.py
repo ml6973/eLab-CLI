@@ -4,32 +4,42 @@ import json
 import ConfigParser
 import re
 import string
+import os.path
 from validate_email import validate_email
 
 def validateUserName(userName):
+    #Check if userName is empty or blank
     if not userName or userName.isspace():
-        print("JSON Error: userName cannot be blank")
+        print("JSON Warning: userName cannot be blank")
         return False
-    #if re.match(r"([a-zA-Z0-9\-\_])+\Z", userName):
+
+    #Check for invaid characters
     if re.search(r'[^a-zA-Z0-9\-\_]', userName):
-        print("JSON Error: Username '%s' has invalid characters."
-              " Only letters, numbers, dashses, and underscore is allowed"
+        print("JSON Warning: Username '%s' has invalid characters."
+              " Only letters, numbers, dashses, and underscores is allowed"
                % userName)
         return False
     return True
 
 def validateEmail(userName, email):
+    #Check if email is empty or blank
     if not email or email.isspace():
-        print("JSON Error: email cannot be blank, user '%s'" % userName)
+        print("JSON Warning: email cannot be blank, user '%s'" % userName)
         return False
+
+    #Check if the email actually exists
     if not validate_email(email, verify=True):
-        print("JSON Error: invalid email for user '%s'" % userName)
+        print("JSON Warning: invalid email for user '%s'" % userName)
         return False
     return True
 
 
 #register <JSON>
 
+configFileName = "CLI_config.ini"
+studentsSuccess = 0
+studentsFail = 0
+studentsDuplicates = 0
 passwordHash = "$2y$10$tIoSoR.uDxWAXyUqs8oTguY/ssvmkbHIVG9zOwOZOzoJHPBkFvgJC"
 
 if len(sys.argv) != 2:
@@ -37,8 +47,11 @@ if len(sys.argv) != 2:
     exit()
 
 #load config file in
+if not os.path.isfile(configFileName):
+    print("Config Error: Missing config file, {}".format(configFileName))
+    exit()
 parser = ConfigParser.SafeConfigParser()
-parser.read("CLI_config.ini")
+parser.read(configFileName)
 
 #Verify Connections
 try:
@@ -62,26 +75,30 @@ try:
         students = json.load(json_data)
         #Check if 'students' array exists
         if not 'students' in students:
-            print("JSON Error: Invalid JSON Data, expected array 'students'")
+            raise TypeError('Invalid JSON Data, expected array "students"')
         else:
             for student in students['students']:
                 #verify userName
                 if not 'userName' in student:
-                    print("JSON Error: Invalid JSON Data, missing 'userName'")
+                    studentsFail += 1
+                    print("JSON Warning: Invalid JSON Data, missing 'userName'")
                     continue
 
                 userName = student['userName']
                 userName = userName.strip()
                 if not validateUserName(userName):
+                    studentsFail += 1
                     continue
 
                 #verify email
                 if not 'email' in student:
-                    print("JSON Error: Invalid JSON Data, missing 'email'")
+                    studentsFail += 1
+                    print("JSON Warning: Invalid JSON Data, missing 'email'")
                     continue
                 email = student['email']
                 email = email.strip()
                 if not validateEmail(userName, email):
+                    studentsFail += 1
                     continue
 
 
@@ -98,14 +115,21 @@ try:
                                    "VALUES ('{}', '{}')"
                                    .format(cursor.lastrowid, email))
                     cnx.commit()
+                    studentsSuccess += 1
 
                 except MySQLdb.Error as e:
+                    if e[0] == 1062:
+                        studentsDuplicates += 1
                     print("mySQL error: {}".format(e))
                 except TypeError as e:
                     print("TypeError: {}".format(e))
                 except:
                     print("Insert Error: ", sys.exc_info())
                     cnx.rollback()
+        print("\n{} students registered successfully. "
+              "{} students failed to register. "
+              "{} students already registered.".format(studentsSuccess,
+              studentsFail, studentsDuplicates))
 
 except IOError as e:
     print("IOError: {}".format(e))
@@ -117,8 +141,10 @@ except TypeError as e:
     print("TypeError: {}".format(e))
 except:
     print("Unexpected error with JSON Input: ", sys.exc_info()[0])
+finally:
+    cnx.close()
 
 
 
-cnx.close()
-print("end")
+
+#print("end")
