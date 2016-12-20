@@ -2,56 +2,144 @@ import MySQLdb
 import requests
 import sys
 import json
+import ConfigParser
+import os.path
+import re
 
-if len(sys.argv) != 4:
-  print("Usage:  " + sys.argv[0] + "[image_name] [cloud] [class file]")
-  exit()
+def validateUserName(userName):
+    #Check if userName is empty or blank
+    if not userName or userName.isspace():
+        print("JSON Warning: userName cannot be blank")
+        return False
 
-image_name = sys.argv[1]
-cloud = sys.argv[2]
-idList = list()
+    #Check for invaid characters
+    if re.search(r'[^a-zA-Z0-9\-\_]', userName):
+        print("JSON Warning: Username '%s' has invalid characters."
+              " Only letters, numbers, dashses, and underscores is allowed"
+               % userName)
+        return False
+    return True
 
-# cnx = MySQLdb.connect(host='127.0.0.1', db='oci_eLab', user='root', passwd=sys.argv[8])
+#enroll script main
+if len(sys.argv) != 2:
+    print("Usage:  " + sys.argv[0] + " <JSON File>")
+    exit()
 
-cnx = MySQLdb.connect(host='127.0.0.1', db='oci_eLab', user='root')
-cursor = cnx.cursor()
+configFileName = "CLI_config.ini"
 
-with open(sys.argv[3]) as f:
-  for line in f:
+image_name = None
+cloud = None
+idList = set()
+
+#load config file in
+if not os.path.isfile(configFileName):
+    print("Config Error: Missing config file, {}".format(configFileName))
+    exit()
+
+parser = ConfigParser.SafeConfigParser()
+parser.read(configFileName)
+
+try:
+    #Get connection to db
+    cnx = MySQLdb.connect(host=parser.get("eLab CLI", "hostIP").strip('"'),
+                          user=parser.get("eLab CLI", "userName").strip('"'),
+                          passwd=parser.get("eLab CLI", "password").strip('"'),
+                          db=parser.get("eLab CLI", "db").strip('"'))
     cursor = cnx.cursor()
-    query = ("SELECT userId FROM Users WHERE userName = '" + line.strip() + "'")
-    
-    cursor.execute(query)
-    
-    result = cursor.fetchall()
-    
-    for row in result:
-      idList.append(row[0])
-    cursor.close()
+except MySQLdb.Error as e:
+    print("mySQL error: {}".format(e))
+    exit()
+except:
+    print("Unexpected error with MySQL Connection: ", sys.exc_info()[0])
+    exit()
 
-cnx.close()
+try:
+    #load in the json file
+    with open(sys.argv[1]) as f:
+        json_data = json.load(f)
+        #Check if 'students' array exists
+        if not 'students' in json_data:
+            raise TypeError('Invalid JSON Data, expected array "students"')
+        #Get the ids of the students
+        for student in json_data['students']:
+            #verify userName
+            if not 'userName' in student:
+                #studentsFail += 1
+                print("JSON Warning: Invalid JSON Data, missing 'userName'")
+                continue
 
-url = "http://127.0.0.1:12345/enroll/"
-my_headers = {"Content-Type": 'application/json'}  
+            userName = student['userName']
+            userName = userName.strip()
+            if not validateUserName(userName):
+                #studentsFail += 1
+                continue
 
-for userId in idList:  
-  body = {            
-    "api_uname":"webportal",
-    "api_pass":"greg123",
-    "external_id":userId,
-    "image_name":image_name,
-    "cloud":cloud
-    } 
+            query = ("SELECT userId FROM Users WHERE userName = '" + userName
+                     + "'")
 
-  
-  json_body = json.dumps(body)  
-  r = requests.post(url, json_body, headers=my_headers)  
-  
-  if (r.status_code == requests.codes.created):    
-    print "Student " + str(userId) + " vm successfully created"  
-  else:    
-    print "Error with student " + str(userId)
+            cursor.execute(query)
 
-  print(r.status_code)
+            result = cursor.fetchone()
+            if result:
+              idList.add(result[0])
+        cursor.close()
+
+        #load in image_name
+        if not 'image' in json_data:
+            raise TypeError('Invalid JSON Data, expected array "image"')
+        image_name = json_data['image']
+        image_name = image_name.strip()
+
+        if not image_name or image_name.isspace():
+            raise ValueError("Invalid JSON Data: image cannot be blank")
+
+        if not isinstance(image_name, basestring):
+            raise ValueError("Invalid JSON Data: image must be a string")
+
+        #load in cloud
+        if not 'cloud' in json_data:
+            raise TypeError('Invalid JSON Data, expected array "cloud"')
+        cloud = json_data['cloud']
+        cloud = cloud.strip()
+
+        if not cloud or cloud.isspace():
+            raise ValueError("Invalid JSON Data: cloud cannot be blank")
+
+        if not isinstance(cloud, basestring):
+            raise ValueError("Invalid JSON Data: cloud must be a string")
+
+    cnx.close()
+except MySQLdb.Error as e:
+    print("mySQL error: {}".format(e))
+    exit()
+except:
+    print("Unexpected error: ", sys.exc_info())
+    exit()
+
+url = ("http://" + parser.get("eLab CLI", "APIHostIP").strip('"') + ":"
+      + parser.get("eLab CLI", "APIhostPort").strip('"') + "/enroll/")
+my_headers = {"Content-Type": 'application/json'}
+
+for userId in idList:
+    body = {
+        "api_uname":parser.get("eLab CLI", "APIUserName").strip('"'),
+        "api_pass":parser.get("eLab CLI", "APIPassword").strip('"'),
+        "external_id":userId,
+        "image_name":image_name,
+        "cloud":cloud
+    }
+
+    try:
+          json_body = json.dumps(body)
+          r = requests.post(url, json_body, headers=my_headers)
+
+          if (r.status_code == requests.codes.created):
+            print "Student " + str(userId) + " vm successfully created"
+          else:
+            print "Error with student " + str(userId)
+
+          print(r.status_code)
+    except:
+        print("Unexpected error: ", sys.exc_info()[0])
 
 exit()
