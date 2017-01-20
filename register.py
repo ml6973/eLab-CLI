@@ -105,13 +105,13 @@ try:
                 #insert into portal DB
                 try:
                     #insert new user and get userId
-                    cursor.execute("INSERT INTO users (userName, passwordHash) "
+                    cursor.execute("INSERT INTO Users (userName, passwordHash) "
                                    "VALUES ('{}', '{}')"
                                    .format(userName, passwordHash))
 
 
                     #insert email for user
-                    cursor.execute("INSERT INTO userdata (userId, email) "
+                    cursor.execute("INSERT INTO UserData (userId, email) "
                                    "VALUES ('{}', '{}')"
                                    .format(cursor.lastrowid, email))
                     cnx.commit()
